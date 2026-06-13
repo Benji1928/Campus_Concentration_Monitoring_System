@@ -1,6 +1,3 @@
-# Campus_Concentration_Monitoring_System
-Create AI, check Students if "a mimir" or locked in
-=======
 # Campus Concentration Monitoring System
 
 A real-time AI-driven computer vision system designed to monitor student concentration levels (attentive, sleepy, or distracted) and perform real-time face counting.
@@ -9,24 +6,20 @@ A real-time AI-driven computer vision system designed to monitor student concent
 
 ## Mandatory Requirements
 
-- [ ]
 #### Data
 * Minimum 3 classes: Attentive, Distracted, Drowsy (Sleepy)
 * Minimum **200 annotations/images per class** (600+ total)
 * Self-collected dataset using webcam or recorded lectures
 * Annotation format: YOLO .txt or COCO JSON
 
-- [ ]
 #### Input
 * RGB Images or Video Frames
 * Classroom scenes with single or multiple students.
 
-- [ ]
 #### Output
 * Annotated frames with bounding boxes + engagement label per person
 * Engagement summary statistics (e.g., % attentive per session)
 
-- [ ]
 #### AI Pipelines
 * Deep Learning or Machine Learning
 * Object classification
@@ -124,4 +117,3 @@ This will split the data, scale the features, train a multi-layer neural network
 - `models/scaler.pkl`
 
 
->>>>>>> Stashed changes
