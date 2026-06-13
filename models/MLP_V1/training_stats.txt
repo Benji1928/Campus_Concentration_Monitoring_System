@@ -1,0 +1,29 @@
+MLP Training Statistics — MLP_V1
+==================================================
+
+Configuration
+  V1: 3-layer [128,64,32], relu, Adam, L2=0.001, early_stopping
+
+Dataset
+  Total samples : 2256
+  Train samples : 1804
+  Test samples  : 452
+
+Training
+  Iterations    : 77
+  Final loss    : 0.300937
+
+Evaluation
+  Accuracy      : 0.8164 (81.64%)
+
+Classification Report
+--------------------------------------------------
+              precision    recall  f1-score   support
+
+   ATTENTIVE       0.77      0.82      0.79       150
+      SLEEPY       0.90      0.91      0.90       151
+  DISTRACTED       0.78      0.72      0.75       151
+
+    accuracy                           0.82       452
+   macro avg       0.82      0.82      0.82       452
+weighted avg       0.82      0.82      0.82       452

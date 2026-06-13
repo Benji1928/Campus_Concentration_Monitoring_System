@@ -1,0 +1,29 @@
+MLP Training Statistics — MLP_V2
+==================================================
+
+Configuration
+  V2: 3-layer [256,128,64], tanh, SGD adaptive, momentum=0.9
+
+Dataset
+  Total samples : 2256
+  Train samples : 1804
+  Test samples  : 452
+
+Training
+  Iterations    : 456
+  Final loss    : 0.274398
+
+Evaluation
+  Accuracy      : 0.8075 (80.75%)
+
+Classification Report
+--------------------------------------------------
+              precision    recall  f1-score   support
+
+   ATTENTIVE       0.79      0.76      0.77       150
+      SLEEPY       0.88      0.89      0.89       151
+  DISTRACTED       0.76      0.77      0.76       151
+
+    accuracy                           0.81       452
+   macro avg       0.81      0.81      0.81       452
+weighted avg       0.81      0.81      0.81       452
