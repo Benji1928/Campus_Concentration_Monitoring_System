@@ -22,7 +22,7 @@ from src.classifiers.landmark_pipeline.feature_extractor import (
 from src.classifiers.landmark_pipeline.rule_based import RuleBasedClassifier
 from src.classifiers.landmark_pipeline.mlp_classifier import MLPAttentionClassifier
 
-MODELS_DIR = ROOT / 'models'
+MODELS_DIR = ROOT / 'models' / 'MLP'
 
 COLORS = {
     'ATTENTIVE':  (0, 200, 0),

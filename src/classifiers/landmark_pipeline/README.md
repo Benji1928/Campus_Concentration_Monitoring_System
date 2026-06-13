@@ -22,6 +22,19 @@ Webcam → MediaPipe (468 landmarks) → Feature Extraction (9 features) → MLP
 
 ---
 
+## Dataset Used:
+
+The two datasets links:
+* https://www.kaggle.com/datasets/shivampandey1233/drowsy-dataset
+* https://universe.roboflow.com/neurosense/user-attention
+* https://universe.roboflow.com/distractless/distractless
+
+Potential Test Dataset:
+* https://universe.roboflow.com/bklab/students-in-lecture
+* https://universe.roboflow.com/123-cpztz/ml-pjutg
+
+---
+
 ## Installation
 
 ```powershell
@@ -33,7 +46,13 @@ pip install mediapipe opencv-python scikit-learn pandas joblib
 
 ## Step 1 — Collect Training Data
 
-Run the data collector and hold keys to label frames in real time.
+```powershell
+python src/classifiers/landmark_pipeline/collect_dataset.py
+```  
+Reads images from data/kaggle_drowsy/ + Roboflow folders, runs MediaPipe, writes data/labeled_features.csv. **You might need to change the API Key to ROBOFLOW, set to nothing, "" to not auto-download the dataset**
+
+
+#### Optional: Run the data collector and hold keys to label frames in real time.
 
 ```powershell
 python src/classifiers/landmark_pipeline/collector.py
@@ -72,7 +91,17 @@ Both options produce `models/mlp_model.pkl` and `models/scaler.pkl`.
 
 ---
 
-## Step 3 — Run the Pipeline
+## Step 3 - Check Model against Ground Truth (Evaluation)
+
+Open:
+
+* model_evaluation.ipynb
+
+Run and check the cell output.
+
+---
+
+## Step 4 — Run the Pipeline
 
 **Rule-based only (no training required):**
 ```powershell
@@ -116,3 +145,39 @@ Press `Q` to quit.
 - [ ] Collect 200+ samples per class using `collector.py`
 - [ ] Train MLP via `train.py` or Colab notebook
 - [ ] Run `pipeline.py --mlp` and verify classifications
+
+---
+
+## File Functionalities:
+Here is your file structure converted into a clean, organized Markdown format. I've structured it as a directory tree and a detailed breakdown table for maximum readability.
+
+### Project Structure
+
+```text
+├── collect_dataset.py       # Step 1: Extract features from datasets
+├── train_evaluate.py        # Step 2: Train models + generate all graphs
+├── model_evaluation.ipynb   # Step 3: Ground truth vs. predicted analysis
+├── pipeline.py              # Step 4: Real-time webcam inference
+├── feature_extractor.py     # Core: Computes the 9 features (used by collect & pipeline)
+├── face_mesh.py             # Core: MediaPipe wrapper for real-time tracking
+├── mlp_classifier.py        # Core: MLP wrapper used by pipeline
+├── rule_based.py            # Core: Rule-based classifier used by pipeline
+└── face_landmarker.task     # Model file: Required by MediaPipe Tasks API
+
+```
+
+---
+
+### File Breakdown
+
+| File Name | Component Type | Description |
+| --- | --- | --- |
+| **`collect_dataset.py`** | `Step 1` | Extracts features from datasets. |
+| **`train_evaluate.py`** | `Step 2` | Handles training and generates all performance graphs. |
+| **`model_evaluation.ipynb`** | `Step 3` | Jupyter Notebook for ground truth vs. predicted analysis. |
+| **`pipeline.py`** | `Step 4` | Manages real-time webcam inference. |
+| **`feature_extractor.py`** | `Core` | Computes the 9 features (shared by `collect_dataset.py` and `pipeline.py`). |
+| **`face_mesh.py`** | `Core` | MediaPipe wrapper for real-time face mesh tracking. |
+| **`mlp_classifier.py`** | `Core` | MLP (Multi-Layer Perceptron) wrapper used by the pipeline. |
+| **`rule_based.py`** | `Core` | Rule-based classifier used by the pipeline. |
+| **`face_landmarker.task`** | `Model File` | The trained model file required by the MediaPipe Tasks API. |
