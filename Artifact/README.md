@@ -4,6 +4,35 @@ A real-time AI-driven computer vision system designed to monitor student concent
 
 ---
 
+## Mandatory Requirements
+
+- [ ]
+#### Data
+* Minimum 3 classes: Attentive, Distracted, Drowsy (Sleepy)
+* Minimum **200 annotations/images per class** (600+ total)
+* Self-collected dataset using webcam or recorded lectures
+* Annotation format: YOLO .txt or COCO JSON
+
+- [ ]
+#### Input
+* RGB Images or Video Frames
+* Classroom scenes with single or multiple students.
+
+- [ ]
+#### Output
+* Annotated frames with bounding boxes + engagement label per person
+* Engagement summary statistics (e.g., % attentive per session)
+
+- [ ]
+#### AI Pipelines
+* Deep Learning or Machine Learning
+* Object classification
+* Transfer Learning 
+
+![alt text](ArchitectureDraft.png)
+
+---
+
 ## Features
 - **Real-Time Attention Tracking**: Classify student states as `ATTENTIVE`, `SLEEPY`, or `DISTRACTED` using eye closure levels (EAR/PERCLOS), yawning rates (MAR), and head pose tracking (Pitch, Yaw, Roll).
 - **Dual Classifiers**: Supports both deterministic **Rule-Based** and machine-learning-based **MLP (Multi-Layer Perceptron)** classifiers.
@@ -90,3 +119,5 @@ python src/training/train.py
 This will split the data, scale the features, train a multi-layer neural network, print a classification performance report, and save the model assets:
 - `models/mlp_model.pkl`
 - `models/scaler.pkl`
+
+

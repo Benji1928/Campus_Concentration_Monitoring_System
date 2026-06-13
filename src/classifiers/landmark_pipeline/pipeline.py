@@ -1,9 +1,9 @@
 """
 Real-time attention monitoring pipeline.
 Usage:
-    python src/pipeline.py              # rule-based only
-    python src/pipeline.py --mlp        # rule-based + MLP side-by-side
-    python src/pipeline.py --camera 1   # alternate camera index
+    python src/classifiers/landmark_pipeline/pipeline.py              # rule-based only
+    python src/classifiers/landmark_pipeline/pipeline.py --mlp        # rule-based + MLP side-by-side
+    python src/classifiers/landmark_pipeline/pipeline.py --camera 1   # alternate camera index
 """
 import argparse
 import sys
@@ -12,15 +12,15 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.landmark.face_mesh import FaceMesh
-from src.landmark.feature_extractor import (
+from src.classifiers.landmark_pipeline.face_mesh import FaceMesh
+from src.classifiers.landmark_pipeline.feature_extractor import (
     FeatureExtractor, RIGHT_EYE, LEFT_EYE, MOUTH
 )
-from src.classifiers.rule_based import RuleBasedClassifier
-from src.classifiers.mlp_classifier import MLPAttentionClassifier
+from src.classifiers.landmark_pipeline.rule_based import RuleBasedClassifier
+from src.classifiers.landmark_pipeline.mlp_classifier import MLPAttentionClassifier
 
 MODELS_DIR = ROOT / 'models'
 

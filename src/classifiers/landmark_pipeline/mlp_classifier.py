@@ -3,7 +3,7 @@ import joblib
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 
-from src.landmark.feature_extractor import FEATURE_COLS
+from src.classifiers.landmark_pipeline.feature_extractor import FEATURE_COLS
 
 LABEL_NAMES = {0: 'ATTENTIVE', 1: 'SLEEPY', 2: 'DISTRACTED'}
 

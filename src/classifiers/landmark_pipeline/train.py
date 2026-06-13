@@ -10,11 +10,11 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 
-ROOT = Path(__file__).parent.parent.parent
+ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.landmark.feature_extractor import FEATURE_COLS
-from src.classifiers.mlp_classifier import MLPAttentionClassifier
+from src.classifiers.landmark_pipeline.feature_extractor import FEATURE_COLS
+from src.classifiers.landmark_pipeline.mlp_classifier import MLPAttentionClassifier
 
 DATA_PATH  = ROOT / 'data' / 'labeled_features.csv'
 MODELS_DIR = ROOT / 'models'
