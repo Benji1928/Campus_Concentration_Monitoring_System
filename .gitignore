@@ -1,2 +1,14 @@
+data/ 
+models/
+__pycache__/
+*.pyc
+*.pkl
+*.csv
+.env
+venv/
+.venv/
+face-env
+annotate
+/.vscode/
 face-env
 models
