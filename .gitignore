@@ -10,3 +10,5 @@ venv/
 face-env
 annotate
 /.vscode/
+face-env
+models
