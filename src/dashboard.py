@@ -227,6 +227,10 @@ class Dashboard:
             ok, frame = cap.read()
             if not ok:
                 break
+            # Skip inference when the display hasn't caught up — drain the camera
+            # buffer but don't burn CPU on detection/classification for dropped frames.
+            if self._frame_queue.full():
+                continue
             frame = cv2.resize(frame, (FEED_W, FEED_H))
             result = self._pipeline.process_frame(frame)
             annotated = _annotate(frame, result)
@@ -319,13 +323,12 @@ def _annotate(frame: np.ndarray, result: PipelineResult) -> np.ndarray:
     return out
 
 
-def _to_rgba(frame_bgr: np.ndarray) -> list:
+def _to_rgba(frame_bgr: np.ndarray) -> np.ndarray:
     h, w = frame_bgr.shape[:2]
     if (w, h) != (FEED_W, FEED_H):
         frame_bgr = cv2.resize(frame_bgr, (FEED_W, FEED_H))
-    rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    rgba = np.dstack([rgb, np.full((h, w), 255, dtype=np.uint8)])
-    return (rgba.astype(np.float32) / 255.0).ravel()
+    rgba = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGBA)
+    return (rgba.astype(np.float32) * (1.0 / 255.0)).ravel()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

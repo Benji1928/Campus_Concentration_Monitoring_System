@@ -16,14 +16,22 @@ _TRANSFORM = T.Compose([
 NUM_CLASSES = 3
 _HIDDEN = 128
 
+# Training used ImageFolder which sorts classes alphabetically:
+#   model index: 0=Attentive  1=Distracted  2=Drowsy
+# Global LABEL_NAMES uses:
+#   code  index: 0=ATTENTIVE  1=SLEEPY      2=DISTRACTED
+# Remap model index → code index, and reorder probs to [ATTENTIVE, SLEEPY, DISTRACTED]
+_MODEL_TO_CODE = [0, 2, 1]          # Attentive→0, Distracted→2, Drowsy→1
+_PROB_REORDER  = [0, 2, 1]          # probs[ATTENTIVE, DROWSY, DISTRACTED] → [ATTENTIVE, SLEEPY, DISTRACTED]
+
 
 def _build_timm_model(model_name: str) -> nn.Module:
     model = timm.create_model(model_name, pretrained=False, num_classes=1)
     num_features = model.classifier.in_features
     model.classifier = nn.Sequential(
         nn.Linear(num_features, _HIDDEN),
-        nn.Hardswish(),
-        nn.Dropout(0.2),
+        nn.ReLU(),
+        nn.Dropout(0.3),
         nn.Linear(_HIDDEN, NUM_CLASSES),
     )
     return model
@@ -59,12 +67,14 @@ class MobileNetV3Classifier(BaseAttentionClassifier):
         with torch.no_grad():
             logits = self._model(tensor)
         probs = torch.softmax(logits, dim=1).squeeze().cpu().numpy()
-        label_int = int(probs.argmax())
+        model_idx = int(probs.argmax())
+        label_int = _MODEL_TO_CODE[model_idx]
+        reordered = probs[_PROB_REORDER].astype(np.float32)
         return ClassifierResult(
             label=LABEL_NAMES[label_int],
             label_int=label_int,
-            probabilities=probs,
-            confidence=float(probs[label_int]),
+            probabilities=reordered,
+            confidence=float(probs[model_idx]),
         )
 
 
@@ -84,10 +94,12 @@ class EfficientNetV2Classifier(BaseAttentionClassifier):
         with torch.no_grad():
             logits = self._model(tensor)
         probs = torch.softmax(logits, dim=1).squeeze().cpu().numpy()
-        label_int = int(probs.argmax())
+        model_idx = int(probs.argmax())
+        label_int = _MODEL_TO_CODE[model_idx]
+        reordered = probs[_PROB_REORDER].astype(np.float32)
         return ClassifierResult(
             label=LABEL_NAMES[label_int],
             label_int=label_int,
-            probabilities=probs,
-            confidence=float(probs[label_int]),
+            probabilities=reordered,
+            confidence=float(probs[model_idx]),
         )
