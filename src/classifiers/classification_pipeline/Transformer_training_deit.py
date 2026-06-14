@@ -33,8 +33,8 @@ from src.classifiers.classification_pipeline.transformer_configs import DeiTTiny
 CONFIG = DeiTTinyConfig()
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-CLASS_NAMES = ['ATTENTIVE', 'SLEEPY', 'DISTRACTED']
-CUSTOM_CLASS_TO_IDX = {'Attentive': 0, 'Sleepy': 1, 'Distracted': 2}
+CLASS_NAMES = ['ATTENTIVE', 'DROWSY', 'DISTRACTED']
+CUSTOM_CLASS_TO_IDX = {'Attentive': 0, 'Drowsy': 1, 'Distracted': 2}
 
 
 def build_classifier_head(in_features: int, hidden_sizes: list, num_classes: int,

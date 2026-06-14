@@ -26,10 +26,10 @@ _HIDDEN = 128
 # Training used ImageFolder which sorts classes alphabetically:
 #   model index: 0=Attentive  1=Distracted  2=Drowsy
 # Global LABEL_NAMES uses:
-#   code  index: 0=ATTENTIVE  1=SLEEPY      2=DISTRACTED
-# Remap model index → code index, and reorder probs to [ATTENTIVE, SLEEPY, DISTRACTED]
+#   code  index: 0=ATTENTIVE  1=DROWSY      2=DISTRACTED
+# Remap model index → code index, and reorder probs to [ATTENTIVE, DROWSY, DISTRACTED]
 _MODEL_TO_CODE = [0, 2, 1]          # Attentive→0, Distracted→2, Drowsy→1
-_PROB_REORDER  = [0, 2, 1]          # probs[ATTENTIVE, DROWSY, DISTRACTED] → [ATTENTIVE, SLEEPY, DISTRACTED]
+_PROB_REORDER  = [0, 2, 1]          # probs[ATTENTIVE, DROWSY, DISTRACTED] → [ATTENTIVE, DROWSY, DISTRACTED]
 
 
 def _build_timm_model(model_name: str) -> nn.Module:

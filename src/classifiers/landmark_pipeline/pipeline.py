@@ -26,7 +26,7 @@ MODELS_DIR = ROOT / 'models' / 'MLP'
 
 COLORS = {
     'ATTENTIVE':  (0, 200, 0),
-    'SLEEPY':     (0, 165, 255),
+    'DROWSY':     (0, 165, 255),
     'DISTRACTED': (0, 0, 230),
 }
 NO_FACE_COLOR = (120, 120, 120)

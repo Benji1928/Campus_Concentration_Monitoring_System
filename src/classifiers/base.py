@@ -3,14 +3,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
-LABEL_NAMES = {0: "ATTENTIVE", 1: "SLEEPY", 2: "DISTRACTED"}
+LABEL_NAMES = {0: "ATTENTIVE", 1: "DROWSY", 2: "DISTRACTED"}
 
 
 @dataclass
 class ClassifierResult:
     label: str
     label_int: int
-    probabilities: np.ndarray  # shape (3,) — [attentive, sleepy, distracted]
+    probabilities: np.ndarray  # shape (3,) — [attentive, drowsy, distracted]
     confidence: float
 
 

@@ -25,10 +25,15 @@ MODELS_DIR = ROOT / "models"
 
 @dataclass
 class PipelineResult:
-    faces: list = field(default_factory=list)   # list[FaceDetection]
-    classifier_result: ClassifierResult | None = None
+    faces: list = field(default_factory=list)             # list[FaceDetection], sorted largest-first
+    classifier_results: list = field(default_factory=list)  # list[ClassifierResult | None], aligned with faces
     features: dict | None = None
     active_classifier_name: str = ""
+
+    @property
+    def classifier_result(self) -> 'ClassifierResult | None':
+        """Primary (largest) face result — backward-compat for result panel."""
+        return self.classifier_results[0] if self.classifier_results else None
 
 
 # ── Adapters for existing classifiers ────────────────────────────────────────
@@ -86,10 +91,11 @@ class InferencePipeline:
         if not faces or self._clf is None:
             return PipelineResult(faces=faces)
 
-        # Use the largest detected face (by area)
-        primary = max(faces, key=lambda d: (d.bbox[2] - d.bbox[0]) * (d.bbox[3] - d.bbox[1]))
-        x1, y1, x2, y2 = primary.bbox
+        # Sort largest-first so index 0 = primary face for the result panel
+        faces = sorted(faces, key=lambda d: (d.bbox[2] - d.bbox[0]) * (d.bbox[3] - d.bbox[1]), reverse=True)
 
+        # Landmark-based classifiers: FaceMesh returns one set of landmarks for the whole
+        # frame, so features always come from the primary face — inherent limitation.
         features = None
         if self._clf.needs_landmarks:
             landmarks = self._face_mesh.process(frame)
@@ -98,23 +104,25 @@ class InferencePipeline:
             else:
                 return PipelineResult(faces=faces, active_classifier_name=self._clf.name)
 
-        # Crop face with a small padding, clamped to frame bounds
         h, w = frame.shape[:2]
-        pad = max(10, int((x2 - x1) * 0.1))
-        cx1 = max(0, x1 - pad)
-        cy1 = max(0, y1 - pad)
-        cx2 = min(w, x2 + pad)
-        cy2 = min(h, y2 + pad)
-        face_crop = frame[cy1:cy2, cx1:cx2]
-
-        try:
-            result = self._clf.predict(face_crop, features)
-        except Exception:
-            result = None
+        clf_results = []
+        for face in faces:
+            x1, y1, x2, y2 = face.bbox
+            pad = max(10, int((x2 - x1) * 0.1))
+            cx1 = max(0, x1 - pad)
+            cy1 = max(0, y1 - pad)
+            cx2 = min(w, x2 + pad)
+            cy2 = min(h, y2 + pad)
+            face_crop = frame[cy1:cy2, cx1:cx2]
+            try:
+                r = self._clf.predict(face_crop, features)
+            except Exception:
+                r = None
+            clf_results.append(r)
 
         return PipelineResult(
             faces=faces,
-            classifier_result=result,
+            classifier_results=clf_results,
             features=features,
             active_classifier_name=self._clf.name,
         )
