@@ -5,7 +5,7 @@ from sklearn.preprocessing import StandardScaler
 
 from src.classifiers.landmark_pipeline.feature_extractor import FEATURE_COLS
 
-LABEL_NAMES = {0: 'ATTENTIVE', 1: 'SLEEPY', 2: 'DISTRACTED'}
+LABEL_NAMES = {0: 'ATTENTIVE', 1: 'DROWSY', 2: 'DISTRACTED'}
 
 
 class MLPAttentionClassifier:
@@ -36,7 +36,7 @@ class MLPAttentionClassifier:
         return LABEL_NAMES[label_int], label_int
 
     def predict_proba(self, features: dict) -> np.ndarray:
-        """Returns probability array [attentive, sleepy, distracted]."""
+        """Returns probability array [attentive, drowsy, distracted]."""
         x = self._scaler.transform(self._to_array(features))
         return self._model.predict_proba(x)[0]
 

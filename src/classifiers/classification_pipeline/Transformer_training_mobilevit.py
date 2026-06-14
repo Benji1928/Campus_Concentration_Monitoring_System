@@ -33,8 +33,8 @@ from src.classifiers.classification_pipeline.transformer_configs import MobileVi
 CONFIG = MobileViTXXSConfig()
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-CLASS_NAMES = ['ATTENTIVE', 'SLEEPY', 'DISTRACTED']
-CUSTOM_CLASS_TO_IDX = {'Attentive': 0, 'Sleepy': 1, 'Distracted': 2}
+CLASS_NAMES = ['ATTENTIVE', 'DROWSY', 'DISTRACTED']
+CUSTOM_CLASS_TO_IDX = {'Attentive': 0, 'Drowsy': 1, 'Distracted': 2}
 
 
 def load_datasets(train_transform, val_transform):

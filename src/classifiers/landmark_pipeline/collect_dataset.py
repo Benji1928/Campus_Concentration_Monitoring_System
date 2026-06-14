@@ -98,7 +98,7 @@ ROBOFLOW_LABEL_MAP = {
     'looking_away': 2,
 }
 
-LABEL_NAMES = {0: 'ATTENTIVE', 1: 'SLEEPY', 2: 'DISTRACTED'}
+LABEL_NAMES = {0: 'ATTENTIVE', 1: 'DROWSY', 2: 'DISTRACTED'}
 
 
 # ── Roboflow auto-download ─────────────────────────────────────────────────────

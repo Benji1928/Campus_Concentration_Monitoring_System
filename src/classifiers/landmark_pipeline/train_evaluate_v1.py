@@ -39,7 +39,7 @@ CONFIG = MLPV1Config()
 
 DATA_PATH  = ROOT / 'data' / 'labeled_features.csv'
 MODELS_DIR = ROOT / 'models' / CONFIG.output_dir
-LABEL_NAMES = {0: 'ATTENTIVE', 1: 'SLEEPY', 2: 'DISTRACTED'}
+LABEL_NAMES = {0: 'ATTENTIVE', 1: 'DROWSY', 2: 'DISTRACTED'}
 COLORS = {0: '#2ecc71', 1: '#e67e22', 2: '#e74c3c'}
 
 STAT_THRESHOLDS = np.round(np.arange(0.05, 1.00, 0.05), 2)

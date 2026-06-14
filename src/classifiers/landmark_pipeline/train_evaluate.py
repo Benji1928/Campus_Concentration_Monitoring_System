@@ -41,7 +41,7 @@ from src.classifiers.landmark_pipeline.feature_extractor import FEATURE_COLS
 
 DATA_PATH  = ROOT / 'data' / 'labeled_features.csv'
 MODELS_DIR = ROOT / 'models' / 'MLP'
-LABEL_NAMES = {0: 'ATTENTIVE', 1: 'SLEEPY', 2: 'DISTRACTED'}
+LABEL_NAMES = {0: 'ATTENTIVE', 1: 'DROWSY', 2: 'DISTRACTED'}
 COLORS = {0: '#2ecc71', 1: '#e67e22', 2: '#e74c3c'}
 
 # Confidence thresholds sampled at 0.05 intervals for stats file
