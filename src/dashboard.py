@@ -61,6 +61,9 @@ class Dashboard:
         self._batch_stop_event = threading.Event()
         self._batch_label_counts: dict[str, int] = {}
 
+        # Shared settings
+        self._det_conf: float = 0.3
+
         self._build_ui()
 
     # ── UI Construction ───────────────────────────────────────────────────────
@@ -124,6 +127,12 @@ class Dashboard:
                     callback=self._on_classifier_change,
                     tag="clf_combo",
                 )
+                dpg.add_text("Detection Threshold", color=(180, 180, 180, 255))
+                dpg.add_slider_float(
+                    tag="conf_slider", min_value=0.1, max_value=0.9,
+                    default_value=0.3, format="%.2f", width=-1,
+                    callback=self._on_conf_change,
+                )
                 dpg.add_separator()
 
                 dpg.add_text("Classification", tag="result_header")
@@ -144,11 +153,12 @@ class Dashboard:
                     dpg.add_text("0%", tag=f"prob_pct_{i}", color=(200, 200, 200, 255))
 
                 dpg.add_separator()
-                dpg.add_text("Face Features", color=(180, 180, 180, 255), tag="feat_header")
-                for feat in ["EAR", "MAR", "Yaw", "Pitch", "PERCLOS", "Blink/min"]:
+                dpg.add_text("Session Counts", color=(180, 180, 180, 255))
+                for name in CLASS_NAMES:
+                    col = [int(c * 255) for c in LABEL_COLORS[name][:3]] + [255]
                     with dpg.group(horizontal=True):
-                        dpg.add_text(f"{feat}:", color=(150, 150, 150, 255), indent=8)
-                        dpg.add_text("—", tag=f"feat_{feat}", color=(200, 200, 200, 255))
+                        dpg.add_text(f"{name}:", color=col, indent=8)
+                        dpg.add_text("0", tag=f"live_count_{name}", color=(200, 200, 200, 255))
 
     def _build_upload_tab(self):
         with dpg.group(horizontal=True):
@@ -227,10 +237,15 @@ class Dashboard:
         else:
             dpg.set_value("status_text", f"Ready: {Path(path).name} — press Start Stream")
 
+    def _on_conf_change(self, sender, value):
+        self._det_conf = value
+        self._pipeline.set_detection_conf(value)
+
     def _on_classifier_change(self, sender, value):
         self._pipeline.set_classifier(self._registry[value]())
         self._pipeline.reset()
         self._clear_results()
+        self._reset_live_counts()
 
     def _on_start(self, *_):
         if self._worker_thread and self._worker_thread.is_alive():
@@ -239,6 +254,7 @@ class Dashboard:
             dpg.set_value("status_text", "Batch inference running — wait for it to finish first")
             return
         self._stop_event.clear()
+        self._reset_live_counts()
         dpg.configure_item("start_btn", enabled=False)
         dpg.configure_item("stop_btn", enabled=True)
 
@@ -270,6 +286,7 @@ class Dashboard:
                 break
         self._clear_feed()
         self._clear_results()
+        self._reset_live_counts()
         dpg.set_value("status_text", "")
 
     # ── Upload tab callbacks ──────────────────────────────────────────────────
@@ -371,6 +388,7 @@ class Dashboard:
     def _batch_worker(self, paths: list[str], clf_name: str):
         pipeline = InferencePipeline(FEED_W, FEED_H)
         pipeline.set_classifier(self._registry[clf_name]())
+        pipeline.set_detection_conf(self._det_conf)
 
         for i, path in enumerate(paths):
             if self._batch_stop_event.is_set():
@@ -397,38 +415,33 @@ class Dashboard:
         # Live feed
         try:
             rgba, result = self._frame_queue.get_nowait()
-            dpg.set_value("feed_texture", rgba)
-
-            n_faces = len(result.faces)
-            dpg.set_value(
-                "status_text",
-                f"Faces detected: {n_faces}",
-            )
-
-            clf_result = result.classifier_result
-            if clf_result is not None:
-                col = [int(c * 255) for c in LABEL_COLORS.get(
-                    clf_result.label, LABEL_COLORS["NO FACE"])[:3]] + [255]
-                dpg.configure_item("result_label", color=col)
-                dpg.set_value("result_label", clf_result.label)
-                dpg.set_value("result_conf", f"{clf_result.confidence:.1%}")
-                for i, p in enumerate(clf_result.probabilities):
-                    dpg.set_value(f"prob_bar_{i}", float(p))
-                    dpg.set_value(f"prob_pct_{i}", f"{p:.1%}")
+            if self._stop_event.is_set():
+                pass  # discard stale post-stop frame
             else:
-                self._clear_results()
+                dpg.set_value("feed_texture", rgba)
 
-            features = result.features
-            if features:
-                dpg.set_value("feat_EAR",       f"{features['ear_avg']:.3f}")
-                dpg.set_value("feat_MAR",       f"{features['mar']:.3f}")
-                dpg.set_value("feat_Yaw",       f"{features['yaw']:+.1f}°")
-                dpg.set_value("feat_Pitch",     f"{features['pitch']:+.1f}°")
-                dpg.set_value("feat_PERCLOS",   f"{features['perclos']:.2f}")
-                dpg.set_value("feat_Blink/min", f"{features['blink_rate']:.1f}")
-            else:
-                for feat in ["EAR", "MAR", "Yaw", "Pitch", "PERCLOS", "Blink/min"]:
-                    dpg.set_value(f"feat_{feat}", "—")
+                n_faces = len(result.faces)
+                dpg.set_value("status_text", f"Faces detected: {n_faces}")
+
+                clf_result = result.classifier_result
+                if clf_result is not None:
+                    col = [int(c * 255) for c in LABEL_COLORS.get(
+                        clf_result.label, LABEL_COLORS["NO FACE"])[:3]] + [255]
+                    dpg.configure_item("result_label", color=col)
+                    dpg.set_value("result_label", clf_result.label)
+                    dpg.set_value("result_conf", f"{clf_result.confidence:.1%}")
+                    for i, p in enumerate(clf_result.probabilities):
+                        dpg.set_value(f"prob_bar_{i}", float(p))
+                        dpg.set_value(f"prob_pct_{i}", f"{p:.1%}")
+                else:
+                    self._clear_results()
+
+                frame_counts = {k: 0 for k in CLASS_NAMES}
+                for clf_r in result.classifier_results:
+                    if clf_r is not None and clf_r.label in frame_counts:
+                        frame_counts[clf_r.label] += 1
+                for name in CLASS_NAMES:
+                    dpg.set_value(f"live_count_{name}", str(frame_counts[name]))
         except queue.Empty:
             pass
 
@@ -445,7 +458,7 @@ class Dashboard:
                 dpg.configure_item("upload_run_btn", enabled=True)
                 counts = self._batch_label_counts
                 summary = "   ".join(f"{k}: {counts.get(k, 0)}" for k in CLASS_NAMES)
-                dpg.set_value("upload_summary", f"Summary:  {summary}")
+                dpg.set_value("upload_summary", f"Counts:  {summary}")
                 break
 
             idx, path, result = item
@@ -456,6 +469,9 @@ class Dashboard:
             if result and result.classifier_result:
                 label = result.classifier_result.label
                 self._batch_label_counts[label] = self._batch_label_counts.get(label, 0) + 1
+            counts = self._batch_label_counts
+            summary = "   ".join(f"{k}: {counts.get(k, 0)}" for k in CLASS_NAMES)
+            dpg.set_value("upload_summary", f"Counts:  {summary}")
 
     def _add_result_row(self, idx: int, path: str, result):
         filename = Path(path).name
@@ -509,6 +525,10 @@ class Dashboard:
                                 dpg.add_text(f"{p:.1%}", color=(200, 200, 200, 255))
 
             dpg.add_separator()
+
+    def _reset_live_counts(self):
+        for name in CLASS_NAMES:
+            dpg.set_value(f"live_count_{name}", "0")
 
     def _clear_feed(self):
         dpg.set_value("feed_texture", [0.0] * (FEED_W * FEED_H * 4))
