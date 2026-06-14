@@ -99,10 +99,10 @@ class Dashboard:
                 label="cam", default_value=0, width=60, min_value=0, max_value=9,
                 tag="cam_idx", callback=self._on_cam_idx_change,
             )
-            dpg.add_button(label="Browse", tag="browse_btn",
+            dpg.add_button(label="Browse...", tag="browse_btn",
                            callback=self._on_browse, enabled=False)
-            dpg.add_button(label="Start", callback=self._on_start, tag="start_btn")
-            dpg.add_button(label="Stop", callback=self._on_stop, tag="stop_btn",
+            dpg.add_button(label="Start Stream", callback=self._on_start, tag="start_btn")
+            dpg.add_button(label="Stop Stream", callback=self._on_stop, tag="stop_btn",
                            enabled=False)
 
         dpg.add_separator()
@@ -126,7 +126,7 @@ class Dashboard:
                 )
                 dpg.add_separator()
 
-                dpg.add_text("Result", tag="result_header")
+                dpg.add_text("Classification", tag="result_header")
                 with dpg.group(horizontal=True):
                     dpg.add_text("Label:", color=(180, 180, 180, 255))
                     dpg.add_text("—", tag="result_label", color=(200, 200, 200, 255))
@@ -135,7 +135,7 @@ class Dashboard:
                     dpg.add_text("—", tag="result_conf", color=(200, 200, 200, 255))
 
                 dpg.add_separator()
-                dpg.add_text("Confidence", color=(180, 180, 180, 255))
+                dpg.add_text("Probabilities", color=(180, 180, 180, 255))
 
                 for i, name in enumerate(CLASS_NAMES):
                     col = [int(c * 255) for c in LABEL_COLORS[name][:3]] + [255]
@@ -144,7 +144,7 @@ class Dashboard:
                     dpg.add_text("0%", tag=f"prob_pct_{i}", color=(200, 200, 200, 255))
 
                 dpg.add_separator()
-                dpg.add_text("Features", color=(180, 180, 180, 255), tag="feat_header")
+                dpg.add_text("Face Features", color=(180, 180, 180, 255), tag="feat_header")
                 for feat in ["EAR", "MAR", "Yaw", "Pitch", "PERCLOS", "Blink/min"]:
                     with dpg.group(horizontal=True):
                         dpg.add_text(f"{feat}:", color=(150, 150, 150, 255), indent=8)
@@ -153,7 +153,7 @@ class Dashboard:
     def _build_upload_tab(self):
         with dpg.group(horizontal=True):
             dpg.add_button(label="Add Images", callback=self._on_add_images)
-            dpg.add_button(label="Clear", callback=self._on_clear_images)
+            dpg.add_button(label="Clear All", callback=self._on_clear_images)
             dpg.add_text("0 images selected", tag="upload_count")
 
         dpg.add_spacer(height=4)
@@ -170,7 +170,7 @@ class Dashboard:
         dpg.add_spacer(height=4)
 
         with dpg.group(horizontal=True):
-            dpg.add_button(label="Run Inference", callback=self._on_run_batch,
+            dpg.add_button(label="Analyze Images", callback=self._on_run_batch,
                            tag="upload_run_btn")
             dpg.add_text("", tag="upload_status", color=(160, 160, 160, 255))
 
@@ -217,7 +217,7 @@ class Dashboard:
             self._clear_feed()
             self._clear_results()
             self._stop_event.clear()
-            dpg.set_value("status_text", f"Processing: {Path(path).name}")
+            dpg.set_value("status_text", f"Loading {Path(path).name}...")
             dpg.configure_item("start_btn", enabled=False)
             dpg.configure_item("stop_btn", enabled=False)
             self._worker_thread = threading.Thread(
@@ -225,7 +225,7 @@ class Dashboard:
             )
             self._worker_thread.start()
         else:
-            dpg.set_value("status_text", f"File: {Path(path).name}  |  Press Start to run")
+            dpg.set_value("status_text", f"Ready: {Path(path).name} — press Start Stream")
 
     def _on_classifier_change(self, sender, value):
         self._pipeline.set_classifier(self._registry[value]())
@@ -340,7 +340,7 @@ class Dashboard:
             self._frame_queue.put_nowait((rgba, result))
         except queue.Full:
             pass
-        dpg.set_value("status_text", f"Done: {Path(path).name}  |  Results shown →")
+        dpg.set_value("status_text", f"Done: {Path(path).name}")
         self._reset_buttons()
 
     def _video_worker(self, source):
@@ -402,7 +402,7 @@ class Dashboard:
             n_faces = len(result.faces)
             dpg.set_value(
                 "status_text",
-                f"Faces: {n_faces}  |  Classifier: {result.active_classifier_name}",
+                f"Faces detected: {n_faces}",
             )
 
             clf_result = result.classifier_result
@@ -473,7 +473,7 @@ class Dashboard:
             # Header: filename + YOLO face count
             with dpg.group(horizontal=True):
                 dpg.add_text(filename, color=(220, 220, 220, 255))
-                face_txt = f"  YOLO: {n_faces} face{'s' if n_faces != 1 else ''} detected"
+                face_txt = f"  {n_faces} face{'s' if n_faces != 1 else ''} detected"
                 dpg.add_text(face_txt, color=(120, 120, 120, 255))
 
             if n_faces == 0:

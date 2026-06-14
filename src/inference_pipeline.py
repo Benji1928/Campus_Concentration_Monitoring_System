@@ -145,19 +145,19 @@ def build_classifier_registry(models_dir: Path = MODELS_DIR) -> dict[str, Callab
             MLPAttentionClassifier.load(str(mlp_path), str(scaler_path))
         )
 
-    mobilenet_path = models_dir / "best_mobilenetv3_with.pth"
+    mobilenet_path = models_dir / "best_mobilenetv3_without.pth"
     if mobilenet_path.exists():
         registry["MobileNetV3"] = lambda: MobileNetV3Classifier(str(mobilenet_path))
 
-    effnet_path = models_dir / "best_efficientnetv2_with.pth"
+    effnet_path = models_dir / "best_efficientnetv2_without.pth"
     if effnet_path.exists():
         registry["EfficientNetV2"] = lambda: EfficientNetV2Classifier(str(effnet_path))
 
-    deit_path = models_dir / "best_deit_tiny_with.pth"
+    deit_path = models_dir / "best_deit_tiny_without.pth"
     if deit_path.exists():
         registry["DeiT-Tiny"] = lambda: DeiTTinyClassifier(str(deit_path))
 
-    mobilevit_path = models_dir / "best_mobilevit_xxs_with.pth"
+    mobilevit_path = models_dir / "best_mobilevit_xxs_without.pth"
     if mobilevit_path.exists():
         registry["MobileViT-XXS"] = lambda: MobileViTClassifier(str(mobilevit_path))
 
