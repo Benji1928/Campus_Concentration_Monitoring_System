@@ -1,5 +1,6 @@
 # Virtual environment
 face-env/
+venv/
 
 # Dataset — raw images and extracted CSV features
 data/
@@ -11,3 +12,5 @@ data/
 __pycache__/
 *.pyc
 *.pyo
+
+models

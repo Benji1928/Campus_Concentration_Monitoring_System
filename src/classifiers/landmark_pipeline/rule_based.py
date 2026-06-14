@@ -1,9 +1,9 @@
 # Thresholds — tune these after observing real feature values in pipeline.py
-EAR_SLEEPY      = 0.22   # eye aspect ratio below this → closing
-PERCLOS_SLEEPY  = 0.35   # >35 % of rolling window with eyes closed
-MAR_YAWN        = 0.60   # mouth aspect ratio above this → yawning
-YAW_DISTRACTED  = 25.0   # degrees off-centre horizontally
-PITCH_DISTRACTED = 20.0  # degrees off-centre vertically (absolute)
+EAR_SLEEPY      = 0.16   # eye aspect ratio below this → closing
+PERCLOS_SLEEPY  = 0.40   # >45 % of rolling window with eyes closed
+MAR_YAWN        = 0.65   # mouth aspect ratio above this → yawning
+YAW_DISTRACTED  = 32.0   # degrees off-centre horizontally
+PITCH_DISTRACTED = 24.0  # degrees off-centre vertically (absolute)
 
 LABEL_NAMES = {0: 'ATTENTIVE', 1: 'SLEEPY', 2: 'DISTRACTED'}
 
