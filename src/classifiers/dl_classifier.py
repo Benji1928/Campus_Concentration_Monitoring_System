@@ -13,6 +13,13 @@ _TRANSFORM = T.Compose([
     T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
+_TRANSFORM_256 = T.Compose([
+    T.ToPILImage(),
+    T.Resize((256, 256)),
+    T.ToTensor(),
+    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
 NUM_CLASSES = 3
 _HIDDEN = 128
 
@@ -102,4 +109,67 @@ class EfficientNetV2Classifier(BaseAttentionClassifier):
             label_int=label_int,
             probabilities=reordered,
             confidence=float(probs[model_idx]),
+        )
+
+
+class DeiTTinyClassifier(BaseAttentionClassifier):
+    name = "DeiT-Tiny"
+    needs_landmarks = False
+
+    def __init__(self, model_path: str):
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = timm.create_model("deit_tiny_patch16_224", pretrained=False, num_classes=0)
+        num_features = model.num_features  # 192
+        model.head = nn.Sequential(
+            nn.Linear(num_features, 128),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, NUM_CLASSES),
+        )
+        self._model = _load_weights(model, model_path, self._device).to(self._device)
+        self._model.eval()
+
+    def predict(self, face_crop: np.ndarray, features: dict | None) -> ClassifierResult:
+        rgb = face_crop[:, :, ::-1].copy()  # BGR → RGB
+        tensor = _TRANSFORM(rgb).unsqueeze(0).to(self._device)
+        with torch.no_grad():
+            logits = self._model(tensor)
+        probs = torch.softmax(logits, dim=1).squeeze().cpu().numpy()
+        label_int = int(probs.argmax())
+        return ClassifierResult(
+            label=LABEL_NAMES[label_int],
+            label_int=label_int,
+            probabilities=probs.astype(np.float32),
+            confidence=float(probs[label_int]),
+        )
+
+
+class MobileViTClassifier(BaseAttentionClassifier):
+    name = "MobileViT-XXS"
+    needs_landmarks = False
+
+    def __init__(self, model_path: str):
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = timm.create_model("mobilevit_xxs", pretrained=False, num_classes=0)
+        num_features = model.num_features  # 320
+        model.head = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(num_features, NUM_CLASSES),
+        )
+        self._model = _load_weights(model, model_path, self._device).to(self._device)
+        self._model.eval()
+
+    def predict(self, face_crop: np.ndarray, features: dict | None) -> ClassifierResult:
+        rgb = face_crop[:, :, ::-1].copy()  # BGR → RGB
+        tensor = _TRANSFORM_256(rgb).unsqueeze(0).to(self._device)
+        with torch.no_grad():
+            logits = self._model(tensor)
+        probs = torch.softmax(logits, dim=1).squeeze().cpu().numpy()
+        label_int = int(probs.argmax())
+        return ClassifierResult(
+            label=LABEL_NAMES[label_int],
+            label_int=label_int,
+            probabilities=probs.astype(np.float32),
+            confidence=float(probs[label_int]),
         )
