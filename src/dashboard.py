@@ -1,7 +1,5 @@
 """
-DearPyGui dashboard — two tabs:
-  Live Stream  : webcam / video file → YOLOv8 face detection → per-face classification
-  Image Upload : batch image inference with per-class probability breakdown
+DearPyGui dashboard — live webcam feed → YOLOv8 face detection → per-face classification.
 
 Run: python src/dashboard.py
 """
@@ -10,7 +8,6 @@ import sys
 import threading
 import time
 from pathlib import Path
-from tkinter import filedialog, Tk
 
 import cv2
 import numpy as np
@@ -22,9 +19,13 @@ sys.path.insert(0, str(ROOT))
 from src.inference_pipeline import InferencePipeline, build_classifier_registry, PipelineResult
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-FEED_W, FEED_H = 640, 480
-WIN_W, WIN_H = 1280, 840
+INFER_W, INFER_H = 640, 480
+WIN_W, WIN_H = 1280, 800
 RESULT_PANEL_W = 380
+DISPLAY_W = WIN_W - RESULT_PANEL_W - 24
+DISPLAY_H = int(DISPLAY_W * 9 / 16)
+PLOT_H = 180
+PLOT_BUFFER = 120
 
 LABEL_COLORS = {
     "ATTENTIVE":  (0.0, 0.78, 0.0, 1.0),
@@ -32,8 +33,16 @@ LABEL_COLORS = {
     "DISTRACTED": (0.9, 0.1, 0.1, 1.0),
     "NO FACE":    (0.5, 0.5, 0.5, 1.0),
 }
-BOX_COLOR_BGR = (0, 220, 80)
+LABEL_COLORS_BGR = {
+    name: tuple(int(c * 255) for c in (rgba[2], rgba[1], rgba[0]))
+    for name, rgba in LABEL_COLORS.items()
+}
 CLASS_NAMES = ["ATTENTIVE", "DROWSY", "DISTRACTED"]
+SERIES_COLORS = {
+    "ATTENTIVE":  (0, 200, 70, 255),
+    "DROWSY":     (255, 165, 0, 255),
+    "DISTRACTED": (230, 25, 25, 255),
+}
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -43,26 +52,24 @@ class Dashboard:
         self._registry = build_classifier_registry()
         self._classifier_names = list(self._registry.keys())
 
-        self._pipeline = InferencePipeline(FEED_W, FEED_H)
+        self._pipeline = InferencePipeline(INFER_W, INFER_H)
         self._pipeline.set_classifier(self._registry[self._classifier_names[0]]())
 
         # Live stream state
         self._frame_queue: queue.Queue = queue.Queue(maxsize=2)
         self._worker_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        self._source_mode = "webcam"
-        self._file_path: str | None = None
         self._cam_index = 0
 
-        # Upload / batch state
-        self._upload_paths: list[str] = []
-        self._batch_queue: queue.Queue = queue.Queue()
-        self._batch_worker_thread: threading.Thread | None = None
-        self._batch_stop_event = threading.Event()
-        self._batch_label_counts: dict[str, int] = {}
-
-        # Shared settings
+        # UI state
+        self._show_boxes: bool = True
         self._det_conf: float = 0.3
+        self._total_faces: int = 0
+
+        # Time series data
+        self._plot_x: list = list(range(PLOT_BUFFER))
+        self._plot_counts: dict = {name: [0.0] * PLOT_BUFFER for name in CLASS_NAMES}
+        self._plot_frame_idx: int = 0
 
         self._build_ui()
 
@@ -73,51 +80,41 @@ class Dashboard:
         dpg.create_viewport(title="Concentration Monitor", width=WIN_W, height=WIN_H)
         dpg.setup_dearpygui()
 
-        blank = [0.0] * (FEED_W * FEED_H * 4)
+        blank = np.zeros(DISPLAY_W * DISPLAY_H * 4, dtype=np.float32)
         with dpg.texture_registry():
-            dpg.add_dynamic_texture(FEED_W, FEED_H, blank, tag="feed_texture")
+            dpg.add_dynamic_texture(DISPLAY_W, DISPLAY_H, blank, tag="feed_texture")
 
         with dpg.window(label="Dashboard", tag="main_win", no_title_bar=True,
                         no_resize=True, no_move=True,
                         width=WIN_W, height=WIN_H, pos=(0, 0)):
-            with dpg.tab_bar():
-                with dpg.tab(label="Live Stream"):
-                    self._build_live_tab()
-                with dpg.tab(label="Image Upload"):
-                    self._build_upload_tab()
+            self._build_live_tab()
 
         dpg.show_viewport()
+        self._build_series_themes()
 
     def _build_live_tab(self):
         with dpg.group(horizontal=True):
-            dpg.add_text("Source:")
-            dpg.add_radio_button(
-                items=["Webcam", "File"],
-                default_value="Webcam",
-                horizontal=True,
-                callback=self._on_source_change,
-                tag="source_radio",
-            )
             dpg.add_input_int(
                 label="cam", default_value=0, width=60, min_value=0, max_value=9,
                 tag="cam_idx", callback=self._on_cam_idx_change,
             )
-            dpg.add_button(label="Browse...", tag="browse_btn",
-                           callback=self._on_browse, enabled=False)
             dpg.add_button(label="Start Stream", callback=self._on_start, tag="start_btn")
             dpg.add_button(label="Stop Stream", callback=self._on_stop, tag="stop_btn",
                            enabled=False)
+            dpg.add_spacer(width=12)
+            dpg.add_checkbox(label="Show Boxes", default_value=True,
+                             tag="show_boxes_cb", callback=self._on_show_boxes_change)
 
         dpg.add_separator()
 
         with dpg.group(horizontal=True):
             with dpg.group():
-                dpg.add_image("feed_texture", width=FEED_W, height=FEED_H, tag="feed_img")
+                dpg.add_image("feed_texture", width=DISPLAY_W, height=DISPLAY_H, tag="feed_img")
                 dpg.add_text("", tag="status_text")
 
             dpg.add_spacer(width=8)
 
-            with dpg.child_window(width=RESULT_PANEL_W, height=FEED_H + 30,
+            with dpg.child_window(width=RESULT_PANEL_W, height=DISPLAY_H + 30,
                                   border=True, tag="result_panel"):
                 dpg.add_text("Classifier")
                 dpg.add_combo(
@@ -128,9 +125,9 @@ class Dashboard:
                     tag="clf_combo",
                 )
                 dpg.add_text("Detection Threshold", color=(180, 180, 180, 255))
-                dpg.add_slider_float(
-                    tag="conf_slider", min_value=0.1, max_value=0.9,
-                    default_value=0.3, format="%.2f", width=-1,
+                dpg.add_drag_float(
+                    tag="conf_slider", min_value=0.1, max_value=0.99,
+                    default_value=0.3, speed=0.01, format="%.2f", width=-1,
                     callback=self._on_conf_change,
                 )
                 dpg.add_separator()
@@ -154,88 +151,52 @@ class Dashboard:
 
                 dpg.add_separator()
                 dpg.add_text("Session Counts", color=(180, 180, 180, 255))
+                with dpg.group(horizontal=True):
+                    dpg.add_text("Total Faces:", color=(180, 180, 180, 255), indent=8)
+                    dpg.add_text("0", tag="live_count_total", color=(200, 200, 200, 255))
                 for name in CLASS_NAMES:
                     col = [int(c * 255) for c in LABEL_COLORS[name][:3]] + [255]
                     with dpg.group(horizontal=True):
                         dpg.add_text(f"{name}:", color=col, indent=8)
-                        dpg.add_text("0", tag=f"live_count_{name}", color=(200, 200, 200, 255))
-
-    def _build_upload_tab(self):
-        with dpg.group(horizontal=True):
-            dpg.add_button(label="Add Images", callback=self._on_add_images)
-            dpg.add_button(label="Clear All", callback=self._on_clear_images)
-            dpg.add_text("0 images selected", tag="upload_count")
-
-        dpg.add_spacer(height=4)
-
-        with dpg.group(horizontal=True):
-            dpg.add_text("Classifier:")
-            dpg.add_combo(
-                items=self._classifier_names,
-                default_value=self._classifier_names[0],
-                width=220,
-                tag="upload_clf_combo",
-            )
-
-        dpg.add_spacer(height=4)
-
-        with dpg.group(horizontal=True):
-            dpg.add_button(label="Analyze Images", callback=self._on_run_batch,
-                           tag="upload_run_btn")
-            dpg.add_text("", tag="upload_status", color=(160, 160, 160, 255))
+                        dpg.add_text("0", tag=f"live_count_{name}",
+                                     color=(200, 200, 200, 255))
 
         dpg.add_separator()
+        self._build_plot_section()
 
-        with dpg.child_window(tag="upload_results_panel", height=620, border=False):
-            pass  # populated dynamically by _add_result_row
+    def _build_plot_section(self):
+        with dpg.plot(tag="time_plot", label="Attentiveness Over Time",
+                      width=-1, height=PLOT_H, no_menus=True, no_box_select=True):
+            dpg.add_plot_legend()
+            dpg.add_plot_axis(dpg.mvXAxis, tag="plot_x_axis",
+                              no_gridlines=True, no_tick_labels=True)
+            dpg.set_axis_limits("plot_x_axis", 0, PLOT_BUFFER - 1)
+            with dpg.plot_axis(dpg.mvYAxis, tag="plot_y_axis", label="Faces"):
+                dpg.add_line_series(
+                    self._plot_x, [0.0] * PLOT_BUFFER,
+                    label="ATTENTIVE", tag="series_ATTENTIVE",
+                )
+                dpg.add_line_series(
+                    self._plot_x, [0.0] * PLOT_BUFFER,
+                    label="DROWSY", tag="series_DROWSY",
+                )
+                dpg.add_line_series(
+                    self._plot_x, [0.0] * PLOT_BUFFER,
+                    label="DISTRACTED", tag="series_DISTRACTED",
+                )
 
-        dpg.add_separator()
-        dpg.add_text("", tag="upload_summary", color=(200, 200, 200, 255))
+    def _build_series_themes(self):
+        for name, color in SERIES_COLORS.items():
+            with dpg.theme() as theme_id:
+                with dpg.theme_component(dpg.mvLineSeries):
+                    dpg.add_theme_color(dpg.mvPlotCol_Line, color,
+                                        category=dpg.mvThemeCat_Plots)
+            dpg.bind_item_theme(f"series_{name}", theme_id)
 
-    # ── Live stream callbacks ─────────────────────────────────────────────────
-
-    def _on_source_change(self, sender, value):
-        self._source_mode = "webcam" if value == "Webcam" else "file"
-        dpg.configure_item("browse_btn", enabled=(self._source_mode == "file"))
-        dpg.configure_item("cam_idx", enabled=(self._source_mode == "webcam"))
+    # ── Callbacks ─────────────────────────────────────────────────────────────
 
     def _on_cam_idx_change(self, sender, value):
         self._cam_index = value
-
-    def _on_browse(self, *_):
-        root = Tk()
-        root.withdraw()
-        path = filedialog.askopenfilename(
-            title="Select image or video",
-            filetypes=[
-                ("Media files", "*.jpg *.jpeg *.png *.bmp *.mp4 *.avi *.mov *.mkv"),
-                ("All files", "*.*"),
-            ],
-        )
-        root.destroy()
-        if not path:
-            return
-        self._file_path = path
-        ext = Path(path).suffix.lower()
-        if ext in (".jpg", ".jpeg", ".png", ".bmp", ".webp"):
-            self._stop_event.set()
-            while not self._frame_queue.empty():
-                try:
-                    self._frame_queue.get_nowait()
-                except queue.Empty:
-                    break
-            self._clear_feed()
-            self._clear_results()
-            self._stop_event.clear()
-            dpg.set_value("status_text", f"Loading {Path(path).name}...")
-            dpg.configure_item("start_btn", enabled=False)
-            dpg.configure_item("stop_btn", enabled=False)
-            self._worker_thread = threading.Thread(
-                target=self._image_worker, args=(path,), daemon=True
-            )
-            self._worker_thread.start()
-        else:
-            dpg.set_value("status_text", f"Ready: {Path(path).name} — press Start Stream")
 
     def _on_conf_change(self, sender, value):
         self._det_conf = value
@@ -247,32 +208,19 @@ class Dashboard:
         self._clear_results()
         self._reset_live_counts()
 
+    def _on_show_boxes_change(self, sender, value):
+        self._show_boxes = value
+
     def _on_start(self, *_):
         if self._worker_thread and self._worker_thread.is_alive():
-            return
-        if self._batch_worker_thread and self._batch_worker_thread.is_alive():
-            dpg.set_value("status_text", "Batch inference running — wait for it to finish first")
             return
         self._stop_event.clear()
         self._reset_live_counts()
         dpg.configure_item("start_btn", enabled=False)
         dpg.configure_item("stop_btn", enabled=True)
-
-        if self._source_mode == "file" and self._file_path:
-            path = self._file_path
-            ext = Path(path).suffix.lower()
-            if ext in (".jpg", ".jpeg", ".png", ".bmp", ".webp"):
-                self._worker_thread = threading.Thread(
-                    target=self._image_worker, args=(path,), daemon=True
-                )
-            else:
-                self._worker_thread = threading.Thread(
-                    target=self._video_worker, args=(path,), daemon=True
-                )
-        else:
-            self._worker_thread = threading.Thread(
-                target=self._video_worker, args=(self._cam_index,), daemon=True
-            )
+        self._worker_thread = threading.Thread(
+            target=self._video_worker, args=(self._cam_index,), daemon=True
+        )
         self._worker_thread.start()
 
     def _on_stop(self, *_):
@@ -289,83 +237,17 @@ class Dashboard:
         self._reset_live_counts()
         dpg.set_value("status_text", "")
 
-    # ── Upload tab callbacks ──────────────────────────────────────────────────
-
-    def _on_add_images(self, *_):
-        root = Tk()
-        root.withdraw()
-        paths = filedialog.askopenfilenames(
-            title="Select images",
-            filetypes=[
-                ("Image files", "*.jpg *.jpeg *.png *.bmp *.webp"),
-                ("All files", "*.*"),
-            ],
-        )
-        root.destroy()
-        if not paths:
-            return
-        self._upload_paths.extend(paths)
-        dpg.set_value("upload_count", f"{len(self._upload_paths)} images selected")
-
-    def _on_clear_images(self, *_):
-        self._upload_paths.clear()
-        dpg.set_value("upload_count", "0 images selected")
-        dpg.delete_item("upload_results_panel", children_only=True)
-        dpg.set_value("upload_summary", "")
-        dpg.set_value("upload_status", "")
-
-    def _on_run_batch(self, *_):
-        if not self._upload_paths:
-            dpg.set_value("upload_status", "No images selected.")
-            return
-        if self._worker_thread and self._worker_thread.is_alive():
-            dpg.set_value("upload_status", "Stop live stream first.")
-            return
-        if self._batch_worker_thread and self._batch_worker_thread.is_alive():
-            dpg.set_value("upload_status", "Already running.")
-            return
-
-        dpg.delete_item("upload_results_panel", children_only=True)
-        dpg.set_value("upload_summary", "")
-        self._batch_label_counts = {k: 0 for k in CLASS_NAMES}
-
-        n = len(self._upload_paths)
-        dpg.set_value("upload_status", f"Running... 0/{n}")
-        dpg.configure_item("upload_run_btn", enabled=False)
-
-        self._batch_stop_event.clear()
-        clf_name = dpg.get_value("upload_clf_combo")
-        paths = list(self._upload_paths)
-        self._batch_worker_thread = threading.Thread(
-            target=self._batch_worker, args=(paths, clf_name), daemon=True
-        )
-        self._batch_worker_thread.start()
-
-    # ── Worker threads ────────────────────────────────────────────────────────
-
-    def _image_worker(self, path: str):
-        frame = cv2.imread(path)
-        if frame is None:
-            dpg.set_value("status_text", f"Cannot read: {path}")
-            self._reset_buttons()
-            return
-        frame = cv2.resize(frame, (FEED_W, FEED_H))
-        result = self._pipeline.process_frame(frame)
-        annotated = _annotate(frame, result)
-        rgba = _to_rgba(annotated)
-        try:
-            self._frame_queue.put_nowait((rgba, result))
-        except queue.Full:
-            pass
-        dpg.set_value("status_text", f"Done: {Path(path).name}")
-        self._reset_buttons()
+    # ── Worker thread ─────────────────────────────────────────────────────────
 
     def _video_worker(self, source):
         cap = cv2.VideoCapture(source)
         if not cap.isOpened():
-            dpg.set_value("status_text", f"Cannot open: {source}")
+            dpg.set_value("status_text", f"Cannot open camera {source}")
             self._reset_buttons()
             return
+
+        scale_x = DISPLAY_W / INFER_W
+        scale_y = DISPLAY_H / INFER_H
 
         while not self._stop_event.is_set():
             ok, frame = cap.read()
@@ -373,10 +255,11 @@ class Dashboard:
                 break
             if self._frame_queue.full():
                 continue
-            frame = cv2.resize(frame, (FEED_W, FEED_H))
-            result = self._pipeline.process_frame(frame)
-            annotated = _annotate(frame, result)
-            rgba = _to_rgba(annotated)
+            infer_frame = cv2.resize(frame, (INFER_W, INFER_H))
+            display_frame = cv2.resize(frame, (DISPLAY_W, DISPLAY_H))
+            result = self._pipeline.process_frame(infer_frame)
+            annotated = self._annotate(display_frame, result, scale_x, scale_y)
+            rgba = self._to_rgba(annotated)
             try:
                 self._frame_queue.put_nowait((rgba, result))
             except queue.Full:
@@ -385,26 +268,6 @@ class Dashboard:
         cap.release()
         self._reset_buttons()
 
-    def _batch_worker(self, paths: list[str], clf_name: str):
-        pipeline = InferencePipeline(FEED_W, FEED_H)
-        pipeline.set_classifier(self._registry[clf_name]())
-        pipeline.set_detection_conf(self._det_conf)
-
-        for i, path in enumerate(paths):
-            if self._batch_stop_event.is_set():
-                break
-            frame = cv2.imread(path)
-            if frame is None:
-                self._batch_queue.put((i, path, None))
-                continue
-            frame = cv2.resize(frame, (FEED_W, FEED_H))
-            pipeline.reset()
-            result = pipeline.process_frame(frame)
-            self._batch_queue.put((i, path, result))
-
-        pipeline.close()
-        self._batch_queue.put(None)  # sentinel
-
     def _reset_buttons(self):
         dpg.configure_item("start_btn", enabled=True)
         dpg.configure_item("stop_btn", enabled=False)
@@ -412,126 +275,104 @@ class Dashboard:
     # ── UI update (main thread, each render frame) ────────────────────────────
 
     def _update_ui(self):
-        # Live feed
         try:
             rgba, result = self._frame_queue.get_nowait()
-            if self._stop_event.is_set():
-                pass  # discard stale post-stop frame
-            else:
-                dpg.set_value("feed_texture", rgba)
-
-                n_faces = len(result.faces)
-                dpg.set_value("status_text", f"Faces detected: {n_faces}")
-
-                clf_result = result.classifier_result
-                if clf_result is not None:
-                    col = [int(c * 255) for c in LABEL_COLORS.get(
-                        clf_result.label, LABEL_COLORS["NO FACE"])[:3]] + [255]
-                    dpg.configure_item("result_label", color=col)
-                    dpg.set_value("result_label", clf_result.label)
-                    dpg.set_value("result_conf", f"{clf_result.confidence:.1%}")
-                    for i, p in enumerate(clf_result.probabilities):
-                        dpg.set_value(f"prob_bar_{i}", float(p))
-                        dpg.set_value(f"prob_pct_{i}", f"{p:.1%}")
-                else:
-                    self._clear_results()
-
-                frame_counts = {k: 0 for k in CLASS_NAMES}
-                for clf_r in result.classifier_results:
-                    if clf_r is not None and clf_r.label in frame_counts:
-                        frame_counts[clf_r.label] += 1
-                for name in CLASS_NAMES:
-                    dpg.set_value(f"live_count_{name}", str(frame_counts[name]))
         except queue.Empty:
-            pass
+            return
 
-        # Batch queue
-        while True:
-            try:
-                item = self._batch_queue.get_nowait()
-            except queue.Empty:
-                break
+        if self._stop_event.is_set():
+            return
 
-            if item is None:  # sentinel — batch done
-                n = len(self._upload_paths)
-                dpg.set_value("upload_status", f"Done — {n} images processed")
-                dpg.configure_item("upload_run_btn", enabled=True)
-                counts = self._batch_label_counts
-                summary = "   ".join(f"{k}: {counts.get(k, 0)}" for k in CLASS_NAMES)
-                dpg.set_value("upload_summary", f"Counts:  {summary}")
-                break
+        dpg.set_value("feed_texture", rgba)
 
-            idx, path, result = item
-            processed = idx + 1
-            total = len(self._upload_paths)
-            dpg.set_value("upload_status", f"Running... {processed}/{total}")
-            self._add_result_row(idx, path, result)
-            if result and result.classifier_result:
-                label = result.classifier_result.label
-                self._batch_label_counts[label] = self._batch_label_counts.get(label, 0) + 1
-            counts = self._batch_label_counts
-            summary = "   ".join(f"{k}: {counts.get(k, 0)}" for k in CLASS_NAMES)
-            dpg.set_value("upload_summary", f"Counts:  {summary}")
+        n_faces = len(result.faces)
+        dpg.set_value("status_text", f"Faces detected: {n_faces}")
 
-    def _add_result_row(self, idx: int, path: str, result):
-        filename = Path(path).name
-        parent = "upload_results_panel"
+        clf_result = result.classifier_result
+        if clf_result is not None:
+            col = [int(c * 255) for c in LABEL_COLORS.get(
+                clf_result.label, LABEL_COLORS["NO FACE"])[:3]] + [255]
+            dpg.configure_item("result_label", color=col)
+            dpg.set_value("result_label", clf_result.label)
+            dpg.set_value("result_conf", f"{clf_result.confidence:.1%}")
+            for i, p in enumerate(clf_result.probabilities):
+                dpg.set_value(f"prob_bar_{i}", float(p))
+                dpg.set_value(f"prob_pct_{i}", f"{p:.1%}")
+        else:
+            self._clear_results()
 
-        with dpg.group(tag=f"upload_row_{idx}", parent=parent):
-            if result is None:
-                dpg.add_text(f"[ERROR]  {filename}  — could not read file",
-                             color=(180, 80, 80, 255))
-                dpg.add_separator()
-                return
+        frame_counts = {k: 0 for k in CLASS_NAMES}
+        for clf_r in result.classifier_results:
+            if clf_r is not None and clf_r.label in frame_counts:
+                frame_counts[clf_r.label] += 1
+        for name in CLASS_NAMES:
+            dpg.set_value(f"live_count_{name}", str(frame_counts[name]))
 
-            n_faces = len(result.faces)
+        self._total_faces += n_faces
+        dpg.set_value("live_count_total", str(self._total_faces))
 
-            # Header: filename + YOLO face count
-            with dpg.group(horizontal=True):
-                dpg.add_text(filename, color=(220, 220, 220, 255))
-                face_txt = f"  {n_faces} face{'s' if n_faces != 1 else ''} detected"
-                dpg.add_text(face_txt, color=(120, 120, 120, 255))
+        self._update_plot(frame_counts)
 
-            if n_faces == 0:
-                dpg.add_text("  No face — skipping classification",
-                             color=(160, 80, 80, 255), indent=8)
+    def _update_plot(self, frame_counts: dict):
+        slot = self._plot_frame_idx % PLOT_BUFFER
+        for name in CLASS_NAMES:
+            self._plot_counts[name][slot] = float(frame_counts[name])
+        self._plot_frame_idx += 1
+        slot_now = self._plot_frame_idx % PLOT_BUFFER
+        for name in CLASS_NAMES:
+            rotated = self._plot_counts[name][slot_now:] + self._plot_counts[name][:slot_now]
+            dpg.set_value(f"series_{name}", [self._plot_x, rotated])
+        dpg.fit_axis_data("plot_y_axis")
+
+    # ── Instance helpers ──────────────────────────────────────────────────────
+
+    def _annotate(self, frame: np.ndarray, result: PipelineResult,
+                  scale_x: float = 1.0, scale_y: float = 1.0) -> np.ndarray:
+        out = frame.copy()
+        for i, face in enumerate(result.faces):
+            x1, y1, x2, y2 = face.bbox
+            x1d = int(x1 * scale_x)
+            y1d = int(y1 * scale_y)
+            x2d = int(x2 * scale_x)
+            y2d = int(y2 * scale_y)
+
+            if self._show_boxes:
+                cv2.rectangle(out, (x1d, y1d), (x2d, y2d), (0, 220, 80), 2)
+
+            clf_r = result.classifier_results[i] if i < len(result.classifier_results) else None
+            if clf_r is not None:
+                # Detection confidence on topmost line
+                det_y = max(y1d - 6 - 3 * 16, 10)
+                cv2.putText(out, f"det:{face.confidence:.2f}", (x1d, det_y),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.35, (180, 180, 180), 1)
+                # Stack all 3 class probabilities above box (ATTENTIVE top, DISTRACTED closest)
+                for li, name in enumerate(CLASS_NAMES):
+                    p = float(clf_r.probabilities[li])
+                    col_bgr = LABEL_COLORS_BGR[name]
+                    y_pos = y1d - 6 - (2 - li) * 16
+                    y_pos = max(y_pos, det_y + 12 + li * 14)
+                    cv2.putText(out, f"{name} {p:.0%}", (x1d, y_pos),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.42, col_bgr, 1)
             else:
-                # Per-face classification results (all faces, not just primary)
-                for fi, clf_r in enumerate(result.classifier_results):
-                    face_tag = f"Face {fi + 1}" if n_faces > 1 else "Result"
-                    if clf_r is None:
-                        with dpg.group(horizontal=True, indent=8):
-                            dpg.add_text(f"[{face_tag}]", color=(130, 130, 130, 255))
-                            dpg.add_text("classifier error", color=(180, 80, 80, 255))
-                        continue
+                cv2.putText(out, f"{face.confidence:.2f}", (x1d, max(y1d - 6, 14)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 220, 80), 1)
+        return out
 
-                    label_col = [int(c * 255) for c in LABEL_COLORS.get(
-                        clf_r.label, LABEL_COLORS["NO FACE"])[:3]] + [255]
-
-                    with dpg.group(indent=8):
-                        with dpg.group(horizontal=True):
-                            dpg.add_text(f"[{face_tag}]", color=(130, 130, 130, 255))
-                            dpg.add_text(f"  {clf_r.label}", color=label_col)
-                            dpg.add_text(f"  conf {clf_r.confidence:.1%}",
-                                         color=(150, 150, 150, 255))
-
-                        for ci, name in enumerate(CLASS_NAMES):
-                            p = float(clf_r.probabilities[ci]) if clf_r.probabilities is not None else 0.0
-                            col = [int(c * 255) for c in LABEL_COLORS[name][:3]] + [255]
-                            with dpg.group(horizontal=True, indent=8):
-                                dpg.add_text(name, color=col)
-                                dpg.add_progress_bar(default_value=p, width=180,
-                                                     tag=f"upload_bar_{idx}_{fi}_{ci}")
-                                dpg.add_text(f"{p:.1%}", color=(200, 200, 200, 255))
-
-            dpg.add_separator()
+    def _to_rgba(self, frame_bgr: np.ndarray) -> np.ndarray:
+        rgba_u8 = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGBA)
+        out = np.empty(rgba_u8.size, dtype=np.float32)
+        np.multiply(rgba_u8.ravel(), np.float32(1.0 / 255.0), out=out)
+        return out
 
     def _reset_live_counts(self):
+        self._total_faces = 0
+        dpg.set_value("live_count_total", "0")
         for name in CLASS_NAMES:
             dpg.set_value(f"live_count_{name}", "0")
 
     def _clear_feed(self):
-        dpg.set_value("feed_texture", [0.0] * (FEED_W * FEED_H * 4))
+        dpg.set_value("feed_texture",
+                      np.zeros(DISPLAY_W * DISPLAY_H * 4, dtype=np.float32))
 
     def _clear_results(self):
         dpg.set_value("result_label", "—")
@@ -549,39 +390,8 @@ class Dashboard:
             time.sleep(1 / 60)
 
         self._stop_event.set()
-        self._batch_stop_event.set()
         self._pipeline.close()
         dpg.destroy_context()
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _annotate(frame: np.ndarray, result: PipelineResult) -> np.ndarray:
-    out = frame.copy()
-    for i, face in enumerate(result.faces):
-        x1, y1, x2, y2 = face.bbox
-        cv2.rectangle(out, (x1, y1), (x2, y2), BOX_COLOR_BGR, 2)
-
-        clf_r = result.classifier_results[i] if i < len(result.classifier_results) else None
-        if clf_r is not None:
-            col_rgb = LABEL_COLORS.get(clf_r.label, LABEL_COLORS["NO FACE"])
-            col_bgr = tuple(int(c * 255) for c in (col_rgb[2], col_rgb[1], col_rgb[0]))
-            text = f"{clf_r.label} {clf_r.confidence:.0%}"
-            cv2.putText(out, text, (x1, max(y1 - 6, 14)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, col_bgr, 1)
-        else:
-            cv2.putText(out, f"{face.confidence:.2f}", (x1, max(y1 - 6, 14)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, BOX_COLOR_BGR, 1)
-
-    return out
-
-
-def _to_rgba(frame_bgr: np.ndarray) -> np.ndarray:
-    h, w = frame_bgr.shape[:2]
-    if (w, h) != (FEED_W, FEED_H):
-        frame_bgr = cv2.resize(frame_bgr, (FEED_W, FEED_H))
-    rgba = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGBA)
-    return (rgba.astype(np.float32) * (1.0 / 255.0)).ravel()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
