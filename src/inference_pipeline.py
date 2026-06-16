@@ -74,7 +74,7 @@ class _MLPAdapter(BaseAttentionClassifier):
 
 class InferencePipeline:
     def __init__(self, frame_w: int = 640, frame_h: int = 480):
-        self._detector = YOLOFaceDetector(str(MODELS_DIR / "face_detection.pt"), conf=0.5)
+        self._detector = YOLOFaceDetector(str(MODELS_DIR / "face_detection.pt"), conf=0.3)
         self._face_mesh = FaceMesh()
         self._extractor = FeatureExtractor(frame_w, frame_h)
         self._clf: BaseAttentionClassifier | None = None
@@ -84,6 +84,9 @@ class InferencePipeline:
 
     def reset(self) -> None:
         self._extractor.reset()
+
+    def set_detection_conf(self, conf: float) -> None:
+        self._detector._conf = conf
 
     def process_frame(self, frame: np.ndarray) -> PipelineResult:
         faces = self._detector.detect(frame)

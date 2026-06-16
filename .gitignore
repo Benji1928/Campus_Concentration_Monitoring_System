@@ -1,6 +1,7 @@
 # Virtual environment
 face-env/
 venv/
+.venv/
 
 # Dataset — raw images and extracted CSV features
 data/
