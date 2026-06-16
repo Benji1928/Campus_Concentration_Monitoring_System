@@ -2,7 +2,8 @@
 face-env/
 venv/
 
-# Dataset — raw images and extracted CSV features
+# Raw working data — large/untracked source images and extracted CSV features
+# (dataset/ is intentionally NOT listed here so it can be committed to git)
 data/
 
 # Trained model binary files — too large for git

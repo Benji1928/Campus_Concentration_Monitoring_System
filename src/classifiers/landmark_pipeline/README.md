@@ -28,6 +28,8 @@ The two datasets links:
 * https://www.kaggle.com/datasets/shivampandey1233/drowsy-dataset
 * https://universe.roboflow.com/neurosense/user-attention
 * https://universe.roboflow.com/distractless/distractless
+* 
+
 
 Potential Test Dataset:
 * https://universe.roboflow.com/bklab/students-in-lecture
@@ -181,3 +183,23 @@ Here is your file structure converted into a clean, organized Markdown format. I
 | **`mlp_classifier.py`** | `Core` | MLP (Multi-Layer Perceptron) wrapper used by the pipeline. |
 | **`rule_based.py`** | `Core` | Rule-based classifier used by the pipeline. |
 | **`face_landmarker.task`** | `Model File` | The trained model file required by the MediaPipe Tasks API. |
+
+### 
+
+# Once only — download images and extract features
+python src/download_dataset.py
+python src/classifiers/landmark_pipeline/extract_features_dataset.py
+
+# Train all three variants (all read the same CSV)
+python src/classifiers/landmark_pipeline/train_evaluate_dataset.py
+python src/classifiers/landmark_pipeline/train_evaluate_dataset_v1.py
+python src/classifiers/landmark_pipeline/train_evaluate_dataset_v2.py
+
+| Script | Config | Output |
+| --- | --- | --- | --- |
+|t rain_evaluate_dataset.py | Baseline (64,32) | relu |	models/MLP_dataset/ |
+| train_evaluate_dataset_v1.py	| V1 (128,64,32) | relu + early stop | 	models/MLP_V1_dataset/ |
+| train_evaluate_dataset_v2.py	| V2 (256,128,64) | tanh + early stop |	models/MLP_V2_dataset/ |
+
+
+All three use the same dataset/labeled_features_dataset.csv and random_state=42

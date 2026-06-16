@@ -15,6 +15,7 @@ Datasets expected at:
 Set ROBOFLOW_API_KEY below to enable auto-download of Roboflow datasets.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -36,7 +37,7 @@ from src.classifiers.landmark_pipeline.feature_extractor import (
 )
 
 # ── Optional: set your Roboflow API key to enable auto-download ───────────────
-ROBOFLOW_API_KEY = 'z9IrIcH6tr0OodGjrCPr'
+ROBOFLOW_API_KEY = os.environ.get('ROBOFLOW_API_KEY', '')
 
 # ── Download FaceLandmarker model if missing ──────────────────────────────────
 _MODEL_PATH = Path(__file__).parent / 'face_landmarker.task'

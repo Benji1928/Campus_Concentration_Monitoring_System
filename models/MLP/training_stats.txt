@@ -8,7 +8,7 @@ Dataset
 
 Training
   Iterations    : 148
-  Final loss    : 0.392443
+  Final loss    : 0.392441
 
 Evaluation
   Accuracy      : 0.8296 (82.96%)
